@@ -1,13 +1,41 @@
-FROM openjdk:21-slim
+FROM openjdk:21 as build
 LABEL authors="foogaro"
 
-#WORKDIR /app/lib
-#COPY ./target/dependency/* .
 WORKDIR /app
 COPY ./target/*.jar ./app.jar
 
+# List jar modules
+RUN jar xf app.jar
+RUN jdeps \
+    --ignore-missing-deps \
+    --print-module-deps \
+    --multi-release 21 \
+    --recursive \
+    --class-path 'BOOT-INF/lib/*' \
+    app.jar > modules.txt
+
+# Create a custom Java runtime
+RUN jlink --add-modules $(cat modules.txt) --strip-debug --no-man-pages --no-header-files --compress=2 --output /app/javaruntime
+
+FROM debian:buster-slim
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH "${JAVA_HOME}/bin:${PATH}"
+COPY --from=build /app/javaruntime $JAVA_HOME
+
+WORKDIR /app
+COPY --from=build /app/app.jar app.jar
+
+ARG REDIS_HOST
+ARG REDIS_PORT
+ARG REDIS_USERNAME
+ARG REDIS_PASSWORD
+
+ENV REDIS_HOST=$REDIS_HOST
+ENV REDIS_PORT=$REDIS_PORT
+ENV REDIS_USERNAME=$REDIS_USERNAME
+ENV REDIS_PASSWORD=$REDIS_PASSWORD
+
 EXPOSE 8080
-#ENTRYPOINT ["java","-server", "-Xms5g", "-Xmx5g", "-Xss1024k", "-XX:MaxMetaspaceSize=1g","-cp", "/app/lib/*", "-jar","/app/look-alike-1.0.0.jar"]ENTRYPOINT ["java","-server", "-Xms5g", "-Xmx5g", "-Xss1024k", "-XX:MaxMetaspaceSize=1g","-cp", "/app/lib/*", "-jar","/app/look-alike-1.0.0.jar"]
 ENTRYPOINT ["java","-server", "-Xms5g", "-Xmx5g", "-Xss1024k", "-XX:MaxMetaspaceSize=1g","-jar"]
 
 CMD ["/app/app.jar"]

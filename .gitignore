@@ -93,3 +93,5 @@ var-lib-mysql
 redis-volume/
 
 images/detected-*
+
+pubsub/pub/Dockerfile.env.values
